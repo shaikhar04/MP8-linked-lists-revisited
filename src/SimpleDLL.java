@@ -173,8 +173,6 @@ public class SimpleDLL<T> implements SimpleList<T> {
         } // if
         // Do the real work
         this.update.value = val;
-        // Note that no more updates are possible
-        this.update = null;
       } // set(T)
     };
   } // listIterator()
