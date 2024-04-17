@@ -6,6 +6,8 @@ import java.util.NoSuchElementException;
  * Simple doubly-linked lists.
  *
  * These do *not* (yet) support the Fail Fast policy.
+ * 
+ * @author Samuel A. Rebelsky
  */
 public class SimpleDLL<T> implements SimpleList<T> {
   // +--------+------------------------------------------------------------
