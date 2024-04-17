@@ -28,6 +28,11 @@ public class SimpleCDLL<T> implements SimpleList<T> {
    */
   int size;
 
+  /**
+   * The number of changes made (to implement fail fast).
+   */
+  int numOfChanges = 0;
+
   // +--------------+------------------------------------------------------
   // | Constructors |
   // +--------------+
@@ -36,9 +41,11 @@ public class SimpleCDLL<T> implements SimpleList<T> {
    * Create an empty list.
    */
   public SimpleCDLL() {
-    this.front = null;
+    this.front = this.dummy;
     this.size = 0;
-    this.dummy = new Node2<T>(null, this.front);
+    this.dummy = new Node2<T>(null);
+    this.dummy.next = this.dummy;
+    this.dummy.prev = this.dummy.next;
   } // SimpleDLL
 
   // +-----------+---------------------------------------------------------
@@ -66,8 +73,8 @@ public class SimpleCDLL<T> implements SimpleList<T> {
        * The cursor is between neighboring values, so we start links
        * to the previous and next value..
        */
-      Node2<T> prev = null;
-      Node2<T> next = SimpleCDLL.this.front;
+      Node2<T> prev = SimpleCDLL.this.dummy;
+      Node2<T> next = SimpleCDLL.this.dummy.next;
 
       /**
        * The node to be updated by remove or set.  Has a value of
@@ -75,23 +82,23 @@ public class SimpleCDLL<T> implements SimpleList<T> {
        */
       Node2<T> update = null;
 
+      /**
+       * The number of changes made (to implement fail fast).
+       */
+      int numOfChanges = SimpleCDLL.this.numOfChanges;
+
       // +---------+-------------------------------------------------------
       // | Methods |
       // +---------+
 
       public void add(T val) throws UnsupportedOperationException {
-
-        // Special case: The list is empty)
-        if (SimpleCDLL.this.front == null) {
-          SimpleCDLL.this.front = new Node2<T>(SimpleCDLL.this.dummy, val, SimpleCDLL.this.dummy);
-          
-          this.prev = SimpleCDLL.this.front;
-          this.next = SimpleCDLL.this.dummy;
-        } // empty list
+        // Check for recent changes
+        if (this.numOfChanges != SimpleCDLL.this.numOfChanges) {
+          throw new ConcurrentModificationException("Iterator is invalid!");
+        } // if
+        
         // Normal case
-        else {
-          this.prev = this.prev.insertAfter(val);
-        } // normal case
+        this.prev = this.prev.insertAfter(val);
 
         // Note that we cannot update
         this.update = null;
@@ -99,23 +106,42 @@ public class SimpleCDLL<T> implements SimpleList<T> {
         // Increase the size
         ++SimpleCDLL.this.size;
 
+        // Record change by iterator
+        ++SimpleCDLL.this.numOfChanges;
+        ++numOfChanges;
+
         // Update the position.  (See SimpleArrayList.java for more of
         // an explanation.)
         ++this.pos;
       } // add(T)
 
       public boolean hasNext() {
-        return (this.pos < SimpleCDLL.this.size);
+        // Check for recent changes
+        if (this.numOfChanges != SimpleCDLL.this.numOfChanges) {
+          throw new ConcurrentModificationException("Iterator is invalid!");
+        } // if
+
+        return (this.next != SimpleCDLL.this.dummy);
       } // hasNext()
 
       public boolean hasPrevious() {
-        return (this.pos > 0);
+        // Check for recent changes
+        if (this.numOfChanges != SimpleCDLL.this.numOfChanges) {
+          throw new ConcurrentModificationException("Iterator is invalid!");
+        } // if
+        return (this.prev != SimpleCDLL.this.dummy);
       } // hasPrevious()
 
       public T next() {
-        if (!this.hasNext()) {
-         throw new NoSuchElementException();
+        // Check for recent changes
+        if (this.numOfChanges != SimpleCDLL.this.numOfChanges) {
+          throw new ConcurrentModificationException("Iterator is invalid!");
         } // if
+
+        if (!hasNext()) {
+          throw new NoSuchElementException();
+        } // if
+        
         // Identify the node to update
         this.update = this.next;
         // Advance the cursor
@@ -123,26 +149,53 @@ public class SimpleCDLL<T> implements SimpleList<T> {
         this.next = this.next.next;
         // Note the movement
         ++this.pos;
+
         // And return the value
         return this.update.value;
       } // next()
 
       public int nextIndex() {
+        // Check for recent changes
+        if (this.numOfChanges != SimpleCDLL.this.numOfChanges) {
+          throw new ConcurrentModificationException("Iterator is invalid!");
+        } // if
         return this.pos;
       } // nextIndex()
 
       public int previousIndex() {
+        // Check for recent changes
+        if (this.numOfChanges != SimpleCDLL.this.numOfChanges) {
+          throw new ConcurrentModificationException("Iterator is invalid!");
+        } // if
         return this.pos - 1;
       } // prevIndex
 
       public T previous() throws NoSuchElementException {
-        if (!this.hasPrevious())
+        // Check for recent changes
+        if (this.numOfChanges != SimpleCDLL.this.numOfChanges) {
+          throw new ConcurrentModificationException("Iterator is invalid!");
+        } // if
+        if (!this.hasPrevious()) {
           throw new NoSuchElementException();
-        // STUB
-        return null;
+        } // if
+        // Identify the node to update
+        this.update = this.prev;
+        // Advance the cursor
+        this.next = this.prev;
+        this.prev = this.prev.prev;
+        // Note the movement
+        --this.pos;
+
+        // And return the value
+        return this.update.value;
       } // previous()
 
       public void remove() {
+        // Check for recent changes
+        if (this.numOfChanges != SimpleCDLL.this.numOfChanges) {
+          throw new ConcurrentModificationException("Iterator is invalid!");
+        } // if
+
         // Sanity check
         if (this.update == null) {
           throw new IllegalStateException();
@@ -166,11 +219,19 @@ public class SimpleCDLL<T> implements SimpleList<T> {
         this.update.remove();
         --SimpleCDLL.this.size;
 
+        // Record change by iterator
+        ++SimpleCDLL.this.numOfChanges;
+        ++numOfChanges;
+
         // Note that no more updates are possible
         this.update = null;
       } // remove()
 
       public void set(T val) {
+        // Check for recent changes
+        if (this.numOfChanges != SimpleCDLL.this.numOfChanges) {
+          throw new ConcurrentModificationException("Iterator is invalid!");
+        } // if
         // Sanity check
         if (this.update == null) {
           throw new IllegalStateException();
